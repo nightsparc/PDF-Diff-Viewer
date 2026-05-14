@@ -12,17 +12,31 @@ However, if you prefer running directly the script, first you need to install th
 
 
 ```bash
-pip install pymupdf Pillow klembord tkinterdnd2 pywin32 pyautogui
+pip install pymupdf Pillow klembord tkinterdnd2 pyautogui "setuptools<81"
 ```
 
 
 Then, just download the script and run on Python. 
 
 ```bash
-python pdf_viewer_app.py
+python3 pdf_viewer_app.py
 ```
 
-Tested on Python 3.12 on Windows. Should work on Linux as well, though untested till now; possibly with small changes.
+Tested on Python 3.12 on Windows. On Windows, install `pywin32` as well if you want Word, RTF, or TXT conversion through Microsoft Word.
+
+##### Linux
+
+Install Tkinter from your system packages before installing the Python libraries. On Debian or Ubuntu-based systems:
+
+```bash
+sudo apt install python3-tk
+python3 -m pip install pymupdf Pillow klembord tkinterdnd2 pyautogui "setuptools<81"
+python3 pdf_viewer_app.py
+```
+
+Drag and drop requires `tkinterdnd2`. If it is not available or cannot initialize on your desktop, the app still starts and the Open buttons continue to work. Clipboard paste requires `klembord` and its `pkg_resources` dependency from `setuptools<81`. The one-finger pan mode requires `pyautogui`; on GNOME Wayland/Xwayland the app normalizes the current Xauthority file for Python-Xlib before importing PyAutoGUI.
+
+Word, RTF, and TXT conversion through Microsoft Word is Windows-only. On Linux, load PDFs directly.
 
 For better comparison uses git diff when available; the binary release for Windows already includes the git diff binaries (taken from git-for-windows, the PortableGit release). If git diff command is not available, uses Python built-in difflib. (Still unsure if this works also with a generic git diff installation; I think colors of moves can be customized in git diff; if so, it will probably broke the moves logic within the script).
 
