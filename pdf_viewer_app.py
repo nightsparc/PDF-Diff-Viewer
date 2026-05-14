@@ -1,4 +1,5 @@
 # -*- coding: UTF-8 -*-
+import atexit
 import difflib
 import inspect
 import os
@@ -11,14 +12,31 @@ import threading
 import time
 import tkinter as tk
 import traceback
+import warnings
 from collections import defaultdict
-from idlelib.tooltip import Hovertip
 from tkinter import ttk, filedialog, messagebox
 
 import fitz
-import klembord
 from PIL import Image, ImageTk
-from tkinterdnd2 import DND_FILES, TkinterDnD
+
+try:
+	with warnings.catch_warnings():
+		warnings.filterwarnings("ignore", message="pkg_resources is deprecated as an API.*")
+		import klembord
+	KLEMBORD_AVAILABLE = True
+except Exception as e:
+	klembord = None
+	KLEMBORD_AVAILABLE = False
+	print(f"Clipboard paste disabled: klembord could not be loaded ({e})", file=sys.stderr)
+
+try:
+	from tkinterdnd2 import DND_FILES, TkinterDnD
+	DND_AVAILABLE = True
+except Exception as e:
+	DND_FILES = None
+	TkinterDnD = None
+	DND_AVAILABLE = False
+	print(f"Drag and drop disabled: tkinterdnd2 could not be loaded ({e})", file=sys.stderr)
 
 try:
 	import win32com.client
@@ -29,14 +47,6 @@ except:
 	windll = None
 	wintypes = None
 	on_windows=0
-
-try:
-	import pyautogui
-	PYAUTOGUI_AVAILABLE = True
-except ImportError:
-	PYAUTOGUI_AVAILABLE = False
-
-
 
 # python -m venv myenv
 # myenv\Scripts\activate
@@ -68,7 +78,133 @@ except ImportError:
 
 #TEMP_PDF_DIR = os.path.join(os.getcwd(), "temp_pdfs")
 TEMP_PDF_DIR = os.path.join(os.path.dirname(__file__), "temp_pdfs")
-os.makedirs(TEMP_PDF_DIR, exist_ok=True)
+NORMALIZED_XAUTHORITY_FILE = None
+
+
+def cleanup_normalized_xauthority():
+	global NORMALIZED_XAUTHORITY_FILE
+	if NORMALIZED_XAUTHORITY_FILE and os.path.exists(NORMALIZED_XAUTHORITY_FILE):
+		try:
+			os.remove(NORMALIZED_XAUTHORITY_FILE)
+		except OSError:
+			pass
+		NORMALIZED_XAUTHORITY_FILE = None
+
+
+def normalize_xauthority_for_python_xlib():
+	"""
+	Python-Xlib can miss GNOME Xwayland cookies when the auth file stores an
+	empty display number. Add an explicit :N entry in a private temp copy.
+	"""
+	display = os.environ.get("DISPLAY", "")
+	xauthority = os.environ.get("XAUTHORITY")
+	global NORMALIZED_XAUTHORITY_FILE
+	match = re.fullmatch(r":(\d+)(?:\.\d+)?", display)
+	if not match or not xauthority or not os.path.exists(xauthority):
+		return
+	try:
+		list_result = subprocess.run(
+			["xauth", "-f", xauthority, "list"],
+			capture_output=True,
+			text=True,
+			check=False,
+		)
+	except Exception:
+		return
+	if list_result.returncode != 0:
+		return
+	for line in list_result.stdout.splitlines():
+		parts = line.split()
+		if len(parts) >= 3 and parts[-2] == "MIT-MAGIC-COOKIE-1":
+			tmp = tempfile.NamedTemporaryFile(prefix="pdf-diff-viewer-xauth-", delete=False)
+			tmp.close()
+			try:
+				with open(xauthority, "rb") as src, open(tmp.name, "wb") as dst:
+					dst.write(src.read())
+				os.chmod(tmp.name, 0o600)
+				add_result = subprocess.run(
+					["xauth", "-f", tmp.name, "add", display, "MIT-MAGIC-COOKIE-1", parts[-1]],
+					capture_output=True,
+					text=True,
+					check=False,
+				)
+				if add_result.returncode == 0:
+					os.environ["XAUTHORITY"] = tmp.name
+					NORMALIZED_XAUTHORITY_FILE = tmp.name
+					atexit.register(cleanup_normalized_xauthority)
+					return
+			except Exception:
+				pass
+			try:
+				os.remove(tmp.name)
+			except OSError:
+				pass
+			return
+
+
+normalize_xauthority_for_python_xlib()
+
+
+try:
+	import pyautogui
+	PYAUTOGUI_AVAILABLE = True
+except Exception as e:
+	pyautogui = None
+	PYAUTOGUI_AVAILABLE = False
+	print(f"One-finger pan disabled: pyautogui could not be loaded ({e})", file=sys.stderr)
+
+
+class Hovertip:
+	def __init__(self, anchor_widget, text, hover_delay=1000):
+		self.anchor_widget = anchor_widget
+		self.text = text
+		self.hover_delay = hover_delay
+		self._after_id = None
+		self._tip_window = None
+		self.anchor_widget.bind("<Enter>", self._schedule, add="+")
+		self.anchor_widget.bind("<Leave>", self._hide, add="+")
+		self.anchor_widget.bind("<ButtonPress>", self._hide, add="+")
+
+	def _schedule(self, event=None):
+		self._cancel()
+		self._after_id = self.anchor_widget.after(self.hover_delay, self._show)
+
+	def _cancel(self):
+		if self._after_id:
+			self.anchor_widget.after_cancel(self._after_id)
+			self._after_id = None
+
+	def _show(self):
+		if self._tip_window or not self.text:
+			return
+		x = self.anchor_widget.winfo_rootx() + 20
+		y = self.anchor_widget.winfo_rooty() + self.anchor_widget.winfo_height() + 6
+		self._tip_window = tk.Toplevel(self.anchor_widget)
+		self._tip_window.wm_overrideredirect(True)
+		self._tip_window.wm_geometry(f"+{x}+{y}")
+		label = ttk.Label(
+			self._tip_window,
+			text=self.text,
+			justify=tk.LEFT,
+			background="#ffffe0",
+			relief=tk.SOLID,
+			borderwidth=1,
+			padding=(4, 2),
+		)
+		label.pack()
+
+	def _hide(self, event=None):
+		self._cancel()
+		if self._tip_window:
+			self._tip_window.destroy()
+			self._tip_window = None
+
+
+def ensure_temp_dir():
+	os.makedirs(TEMP_PDF_DIR, exist_ok=True)
+	return TEMP_PDF_DIR
+
+
 try:
 	windll.user32.SetThreadDpiAwarenessContext(wintypes.HANDLE(-2))
 except AttributeError:
@@ -78,6 +214,9 @@ def convert_clipboard_to_pdf(output_filename="clipboard_content.pdf"):
 	Converts the HTML content from the clipboard to a PDF.
 	If no HTML is found, it uses the plain text content.
 	"""
+	if not KLEMBORD_AVAILABLE:
+		print("Error: Clipboard paste is unavailable because klembord could not be loaded.", file=sys.stderr)
+		return None
 	try:
 		klembord.init()
 	except RuntimeError:
@@ -142,8 +281,9 @@ def convert_clipboard_to_pdf(output_filename="clipboard_content.pdf"):
 		print("Clipboard is empty or contains no readable content.", file=sys.stderr)
 		return None
 	try:
+		ensure_temp_dir()
 		pathlib.Path(output_filename).parent.mkdir(parents=True, exist_ok=True)
-		story = fitz.Story(html=content_to_use)  
+		story = fitz.Story(html=content_to_use)
 		writer = fitz.DocumentWriter(output_filename)
 		mediabox = fitz.paper_rect("a4")  
 		where = mediabox + (36, 36, -36, -36)  
@@ -196,7 +336,7 @@ def convert_word_to_pdf_no_markup(input_file_path, output_pdf_path=None):
 		base_name = os.path.splitext(os.path.basename(input_file_path))[0]
 		output_pdf_path = os.path.join(TEMP_PDF_DIR, f"{base_name}_temp_{os.urandom(4).hex()}.pdf")
 
-	os.makedirs(TEMP_PDF_DIR, exist_ok=True)
+	ensure_temp_dir()
 
 	wdFormatPDF = 17
 	wdRevisionsViewFinal = 0
@@ -531,6 +671,8 @@ class GitSequenceMatcher:
 
 	def _create_temp_files(self):
 		"""Creates temporary files with repr() of each item in the input sequences."""
+		if self.temp_dir:
+			os.makedirs(self.temp_dir, exist_ok=True)
 		with tempfile.NamedTemporaryFile(mode='w+', delete=False, encoding='utf-8', dir=self.temp_dir) as f_a:
 			self.temp_file_a = f_a.name
 			for item in self.a:
@@ -821,7 +963,7 @@ class GitSequenceMatcher:
 
 def align_words_with_git_diff(words_data1, words_data2, case_insensitive, ignore_quotes):
 	a_compare, b_compare = helper_case_quotes(words_data1, words_data2, case_insensitive, ignore_quotes)
-	s = GitSequenceMatcher(a_compare, b_compare,temp_dir='.')
+	s = GitSequenceMatcher(a_compare, b_compare,temp_dir=ensure_temp_dir())
 	common_word_id_counter = 0
 	idx1_current = 0
 	idx2_current = 0
@@ -949,8 +1091,12 @@ class PDFViewerPane:
 		self.canvas.bind('<Home>', self.on_key_scroll) 
 		self.canvas.bind('<End>', self.on_key_scroll)  
 		self.canvas.bind("<<UserCanvasScrolled>>", lambda event, pane=self: self.parent_app.on_pane_scrolled(event, pane))
-		self.canvas.drop_target_register(DND_FILES)
-		self.canvas.dnd_bind('<<Drop>>', self.on_drop)
+		if DND_AVAILABLE:
+			try:
+				self.canvas.drop_target_register(DND_FILES)
+				self.canvas.dnd_bind('<<Drop>>', self.on_drop)
+			except Exception as e:
+				print(f"Drag and drop disabled for pane {self.pane_id}: {e}", file=sys.stderr)
 		self.canvas.bind("<Button-3>", self.on_right_click)
 		self.context_menu = tk.Menu(self.master, tearoff=0)
 		self.canvas.bind("<Double-Button-1>", self._toggle_pan_mode)
@@ -967,12 +1113,17 @@ class PDFViewerPane:
 	def _activate_pan_mode(self):
 		"""Activates the clickless pan mode and starts the cursor snap-back timer."""
 		if not PYAUTOGUI_AVAILABLE:
-			print("Cannot activate pan mode: pyautogui is not installed.")
+			print("Cannot activate pan mode: pyautogui is not available.")
 			return
-			
+
+		try:
+			self._cursor_start_pos = pyautogui.position()
+		except Exception as e:
+			print(f"Cannot activate pan mode: pyautogui failed ({e}).")
+			return
+
 		self._pan_mode_active = True
 		self.canvas.config(cursor="hand2")
-		self._cursor_start_pos = pyautogui.position()
 		
 		# Set the initial scan mark
 		canvas_x = self.canvas.winfo_pointerx() - self.canvas.winfo_rootx()
@@ -1007,7 +1158,12 @@ class PDFViewerPane:
 		if not self._pan_mode_active:
 			return
 		# Move cursor back to the starting point
-		pyautogui.moveTo(self._cursor_start_pos.x, self._cursor_start_pos.y)
+		try:
+			pyautogui.moveTo(self._cursor_start_pos.x, self._cursor_start_pos.y)
+		except Exception as e:
+			print(f"Pan mode deactivated: pyautogui failed ({e}).")
+			self._deactivate_pan_mode()
+			return
 		# Immediately after moving, we must reset the canvas's scan mark
 		# to this position to prevent the canvas from jumping.
 		canvas_x = self._cursor_start_pos.x - self.canvas.winfo_rootx()
@@ -2006,7 +2162,15 @@ class PDFViewerApp:
 
 
 if __name__ == "__main__":
-	root = TkinterDnD.Tk()
+	if DND_AVAILABLE:
+		try:
+			root = TkinterDnD.Tk()
+		except Exception as e:
+			print(f"Drag and drop disabled: TkinterDnD could not initialize ({e})", file=sys.stderr)
+			DND_AVAILABLE = False
+			root = tk.Tk()
+	else:
+		root = tk.Tk()
 	app = PDFViewerApp(root)
 	root.protocol("WM_DELETE_WINDOW", app.on_closing)
 
