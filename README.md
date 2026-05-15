@@ -38,6 +38,45 @@ Drag and drop requires `tkinterdnd2`. If it is not available or cannot initializ
 
 Word, RTF, and TXT conversion through Microsoft Word is Windows-only. On Linux, load PDFs directly.
 
+###### Linux AppImage
+
+An AppImage can be built with [appimage-builder](https://github.com/AppImageCrafters/appimage-builder) using either Docker or Podman. The build uses a dedicated Linux requirements file so Windows, macOS, and PyInstaller dependencies are not bundled.
+
+Using Docker:
+
+```bash
+packaging/appimage/build-docker.sh
+```
+
+Using Podman:
+
+```bash
+packaging/appimage/build-podman.sh
+```
+
+The Podman helper uses `--network=host` by default because rootless Podman can otherwise lose outbound network access in restricted environments. To use Podman's default network instead:
+
+```bash
+APPIMAGE_BUILDER_PODMAN_FLAGS= packaging/appimage/build-podman.sh
+```
+
+If rootless Podman fails during the final AppImage assembly because of FUSE or namespace restrictions, retry with:
+
+```bash
+APPIMAGE_BUILDER_PODMAN_FLAGS="--network=host --privileged" packaging/appimage/build-podman.sh
+```
+
+The AppImage is written to `dist/`. It can be started directly and accepts the same optional file arguments as the script:
+
+```bash
+chmod +x dist/PDF_Diff_Viewer-0.1.0-x86_64.AppImage
+dist/PDF_Diff_Viewer-0.1.0-x86_64.AppImage old.pdf new.pdf
+```
+
+The AppImage includes a freedesktop desktop entry and the icons from `assets/`. Desktop integration can be handled by tools such as AppImageLauncher, Gear Lever, or the desktop environment's AppImage integration support.
+
+The AppImage is self-contained for the normal Linux PDF comparison workflow. It bundles Python, the required Python libraries, Tk, and `git`, so the word comparison uses the same `git diff --no-index` path as the Windows binary without requiring a separate host Git installation.
+
 For better comparison uses git diff when available; the binary release for Windows already includes the git diff binaries (taken from git-for-windows, the PortableGit release). If git diff command is not available, uses Python built-in difflib. (Still unsure if this works also with a generic git diff installation; I think colors of moves can be customized in git diff; if so, it will probably broke the moves logic within the script).
 
 ##### Mac
