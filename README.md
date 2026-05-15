@@ -12,7 +12,7 @@ However, if you prefer running directly the script, first you need to install th
 
 
 ```bash
-pip install pymupdf Pillow klembord tkinterdnd2 pyautogui "setuptools<81"
+pip install pymupdf Pillow klembord tkinterdnd2 "setuptools<81"
 ```
 
 
@@ -30,11 +30,11 @@ Install Tkinter from your system packages before installing the Python libraries
 
 ```bash
 sudo apt install python3-tk
-python3 -m pip install pymupdf Pillow klembord tkinterdnd2 pyautogui "setuptools<81"
+python3 -m pip install pymupdf Pillow klembord tkinterdnd2 "setuptools<81"
 python3 pdf_viewer_app.py
 ```
 
-Drag and drop requires `tkinterdnd2`. If it is not available or cannot initialize on your desktop, the app still starts and the Open buttons continue to work. Clipboard paste requires `klembord` and its `pkg_resources` dependency from `setuptools<81`. The one-finger pan mode requires `pyautogui`; on GNOME Wayland/Xwayland the app normalizes the current Xauthority file for Python-Xlib before importing PyAutoGUI.
+Drag and drop requires `tkinterdnd2`. If it is not available or cannot initialize on your desktop, the app still starts and the Open buttons continue to work. Clipboard paste requires `klembord` and its `pkg_resources` dependency from `setuptools<81`.
 
 Word, RTF, and TXT conversion through Microsoft Word is Windows-only. On Linux, load PDFs directly.
 
@@ -82,7 +82,6 @@ uv run pdf_viewer_app.py
 * Accept HTML text from clipboard (right click > paste). Plain text is supported as well
 * Comparison can ignore case changes, quotes type (useful when comparing OCR documents where you don't care whether it's " or ”), and "f" ligatures (a strange feature that substitutes two or more characters with a similar looking one; see [https://en.wikipedia.org/wiki/Ligature\_(writing)#Ligatures\_in\_Unicode\_(Latin\_alphabets)](Wikipedia) for a more comprehensive discussion)
 * quick jump to next and previous change (note that it's a "screen based" next or previous change; meaning it will take you to the next/previous change that is not currently shown at screen)
-* Double click for enable/disable the one-finger smooth scroll. This is a workaround for Tkinter that doesn't support the two-finger scrolling gesture. When enabled, you will be able to vertically scroll (horizontal is disabled) just moving the cursor with a single finger. The cursor will then snap back to its starting position, allowing for further scrolling. Another solution would be to rewrite the script using kivy, but it's not on my plans
 * Supports drag and drop
 * Files can be loaded also through command line (you can pass either one or two files; if two files are provided, they are automatically compared)
 
