@@ -75,8 +75,52 @@ except:
 # python -m nuitka --mode=standalone --enable-plugin=tk-inter pdf_viewer_app.py
 
 
-#TEMP_PDF_DIR = os.path.join(os.getcwd(), "temp_pdfs")
-TEMP_PDF_DIR = os.path.join(os.path.dirname(__file__), "temp_pdfs")
+APP_ICON_PNG_NAME = "pdf-diff-viewer.png"
+APP_ICON_SVG_NAME = "pdf-diff-viewer.svg"
+APP_WINDOW_CLASS = "Pdfdiffviewer"
+
+
+def get_default_temp_pdf_dir():
+	appdir = os.environ.get("APPDIR")
+	if appdir:
+		return os.path.join(tempfile.gettempdir(), f"pdf-diff-viewer-{os.getuid()}", "temp_pdfs")
+	return os.path.join(os.path.dirname(__file__), "temp_pdfs")
+
+
+TEMP_PDF_DIR = os.environ.get("PDF_DIFF_VIEWER_TEMP_DIR", get_default_temp_pdf_dir())
+
+
+def get_resource_path(*parts):
+	base_dirs = []
+	appdir = os.environ.get("APPDIR")
+	if appdir:
+		base_dirs.append(appdir)
+	base_dirs.append(os.path.dirname(__file__))
+	base_dirs.append(os.getcwd())
+
+	for base_dir in base_dirs:
+		path = os.path.join(base_dir, *parts)
+		if os.path.exists(path):
+			return path
+	return None
+
+
+def configure_window_icon(root):
+	icon_path = (
+		get_resource_path("assets", APP_ICON_PNG_NAME)
+		or get_resource_path("usr", "share", "icons", "hicolor", "256x256", "apps", APP_ICON_PNG_NAME)
+		or get_resource_path("assets", APP_ICON_SVG_NAME)
+		or get_resource_path("usr", "share", "icons", "hicolor", "scalable", "apps", APP_ICON_SVG_NAME)
+	)
+	if not icon_path:
+		return
+
+	try:
+		icon_image = tk.PhotoImage(file=icon_path)
+		root.iconphoto(True, icon_image)
+		root._pdf_diff_viewer_icon = icon_image
+	except Exception as e:
+		print(f"Window icon disabled: could not load {icon_path} ({e})", file=sys.stderr)
 
 
 class Hovertip:
@@ -1501,8 +1545,19 @@ class PDFViewerPane:
 							   current_y_prop * total_height_at_zoom)
 			self.render_visible_pages() 
 		self.canvas.focus_set()
-	def close_pdf(self):
+	def cancel_pending_jobs(self):
+		for job_attr in ("render_job_id", "resize_job_id"):
+			job_id = getattr(self, job_attr, None)
+			if job_id:
+				try:
+					self.master.after_cancel(job_id)
+				except Exception:
+					pass
+				setattr(self, job_attr, None)
+
+	def close_pdf(self, clear_ui=True):
 		"""Closes the PDF document and clears associated data and canvas, including temporary file."""
+		self.cancel_pending_jobs()
 		if self.pdf_document:
 			try:
 				if 0: 
@@ -1523,11 +1578,12 @@ class PDFViewerPane:
 				print(f"Pane {self.pane_id}: Error closing PDF document: {e}")
 			self.pdf_document = None 
 		self.file_name = None 
-		self.rendered_page_cache.clear() 
-		self.words_data = [] 
-		self.page_layout_info = {} 
-		self.canvas.delete("all") 
-		self.canvas.config(scrollregion=(0,0,0,0))
+		if clear_ui:
+			self.rendered_page_cache.clear() 
+			self.words_data = [] 
+			self.page_layout_info = {} 
+			self.canvas.delete("all") 
+			self.canvas.config(scrollregion=(0,0,0,0))
 		if self.temp_pdf_path and os.path.exists(self.temp_pdf_path):
 			try:
 				os.remove(self.temp_pdf_path)
@@ -1535,7 +1591,8 @@ class PDFViewerPane:
 			except Exception as e:
 				print(f"Pane {self.pane_id}: Error deleting temporary PDF {self.temp_pdf_path}: {e}")
 			self.temp_pdf_path = None 
-		self.hide_loading_message() 
+		if clear_ui:
+			self.hide_loading_message() 
 		print(f"Pane {self.pane_id}: PDF closed and resources cleared.")
 class PDFViewerApp:
 	def __init__(self, master):
@@ -2008,23 +2065,33 @@ class PDFViewerApp:
 	def on_closing(self):
 		"""Handles the application closing event, ensuring PDFs are properly closed and temp files deleted."""
 		print("PDFViewerApp: Closing application.")
-		self.pane1.close_pdf() 
-		self.pane2.close_pdf() 
+		self.pane1.close_pdf(clear_ui=False) 
+		self.pane2.close_pdf(clear_ui=False) 
+		self.pdf_documents = [None, None]
+		self.words_data_list = [None, None]
+		self.master.quit()
 		self.master.destroy() 
 
 
 if __name__ == "__main__":
 	if DND_AVAILABLE:
 		try:
-			root = TkinterDnD.Tk()
+			root = TkinterDnD.Tk(className=APP_WINDOW_CLASS)
 		except Exception as e:
 			print(f"Drag and drop disabled: TkinterDnD could not initialize ({e})", file=sys.stderr)
 			DND_AVAILABLE = False
-			root = tk.Tk()
+			root = tk.Tk(className=APP_WINDOW_CLASS)
 	else:
-		root = tk.Tk()
+		root = tk.Tk(className=APP_WINDOW_CLASS)
+	configure_window_icon(root)
 	app = PDFViewerApp(root)
 	root.protocol("WM_DELETE_WINDOW", app.on_closing)
+	auto_close_ms = os.environ.get("PDF_DIFF_VIEWER_AUTO_CLOSE_MS")
+	if auto_close_ms:
+		try:
+			root.after(max(0, int(auto_close_ms)), app.on_closing)
+		except ValueError:
+			print(f"Ignoring invalid PDF_DIFF_VIEWER_AUTO_CLOSE_MS={auto_close_ms!r}", file=sys.stderr)
 
 	root.mainloop()
 

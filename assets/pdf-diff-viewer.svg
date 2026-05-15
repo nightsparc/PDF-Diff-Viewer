@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-label="PDF Diff Viewer">
+  <rect width="256" height="256" rx="40" fill="#24405f"/>
+  <path d="M50 32h68l24 24v154H50z" fill="#f7f2e8"/>
+  <path d="M118 32v26h24z" fill="#d9c8a9"/>
+  <path d="M114 46H72v12h42zM120 76H72v10h48zM120 98H72v10h48zM106 120H72v10h34z" fill="#54616f"/>
+  <path d="M114 32h92v178h-92z" fill="#eef7f0"/>
+  <path d="M184 76h-48v10h48zM184 98h-48v10h48zM170 120h-34v10h34z" fill="#4d6f55"/>
+  <path d="M93 154h34v16H93z" fill="#e35d5b"/>
+  <path d="M137 154h34v16h-34z" fill="#4fa66a"/>
+  <path d="M91 184h82v12H91z" fill="#f0bf55"/>
+  <path d="M122 64h12v120h-12z" fill="#24405f" opacity=".18"/>
+</svg>
