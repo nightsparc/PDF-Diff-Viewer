@@ -7,3 +7,12 @@ venv/
 env/
 
 temp_pdfs/
+
+# AppImage builds
+AppDir/
+appimage-builder-cache/
+.bundle.yml
+build/
+dist/
+*.AppImage
+*.AppImage.zsync

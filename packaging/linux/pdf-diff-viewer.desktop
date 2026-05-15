@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=PDF Diff Viewer
+Comment=Compare PDF documents side by side
+Exec=pdf-diff-viewer %F
+Icon=pdf-diff-viewer
+Terminal=false
+Categories=Office;Viewer;
+MimeType=application/pdf;
+StartupNotify=true
+StartupWMClass=Pdfdiffviewer

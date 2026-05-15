@@ -1,0 +1,73 @@
+version: 1
+
+script:
+  - rm -rf AppDir
+  - mkdir -p AppDir/usr/src/pdf-diff-viewer
+  - mkdir -p AppDir/usr/bin
+  - mkdir -p AppDir/usr/local/bin
+  - mkdir -p AppDir/usr/share/applications
+  - mkdir -p AppDir/usr/share/icons/hicolor/256x256/apps
+  - mkdir -p AppDir/usr/share/icons/hicolor/scalable/apps
+  - cp pdf_viewer_app.py AppDir/usr/src/pdf-diff-viewer/
+  - cp packaging/appimage/requirements.txt AppDir/usr/src/pdf-diff-viewer/
+  - cp packaging/linux/pdf-diff-viewer AppDir/usr/bin/
+  - cp packaging/linux/appdir-uname AppDir/usr/local/bin/uname
+  - cp packaging/linux/pdf-diff-viewer.desktop AppDir/usr/share/applications/io.github.pdf-diff-viewer.desktop
+  - cp assets/pdf-diff-viewer.png AppDir/usr/share/icons/hicolor/256x256/apps/
+  - cp assets/pdf-diff-viewer.svg AppDir/usr/share/icons/hicolor/scalable/apps/
+  - cp assets/pdf-diff-viewer.png AppDir/.DirIcon
+  - chmod +x AppDir/usr/bin/pdf-diff-viewer
+  - chmod +x AppDir/usr/local/bin/uname
+
+AppDir:
+  path: ./AppDir
+  app_info:
+    id: io.github.pdf-diff-viewer
+    name: PDF Diff Viewer
+    icon: pdf-diff-viewer
+    version: 0.1.0
+    exec: usr/bin/python3
+    exec_args: "$APPDIR/usr/src/pdf-diff-viewer/pdf_viewer_app.py $@"
+
+  apt:
+    arch: amd64
+    sources:
+      - sourceline: "deb [arch=amd64] http://archive.ubuntu.com/ubuntu/ noble main universe"
+        key_url: "https://keyserver.ubuntu.com/pks/lookup?op=get&search=0x871920D1991BC93C"
+      - sourceline: "deb [arch=amd64] http://archive.ubuntu.com/ubuntu/ noble-updates main universe"
+        key_url: "https://keyserver.ubuntu.com/pks/lookup?op=get&search=0x871920D1991BC93C"
+      - sourceline: "deb [arch=amd64] http://security.ubuntu.com/ubuntu/ noble-security main universe"
+        key_url: "https://keyserver.ubuntu.com/pks/lookup?op=get&search=0x871920D1991BC93C"
+    include:
+      - ca-certificates
+      - coreutils
+      - git
+      - python3
+      - python3-pip
+      - python3-pkg-resources
+      - python3-tk
+      - tk
+      - tcl
+    exclude: []
+
+  after_bundle: |
+    export PYTHONHOME="${APPDIR}/usr"
+    export PYTHONPATH="${APPDIR}/usr/lib/python3.12/site-packages:${APPDIR}/usr/lib/python3.12/dist-packages:${APPDIR}/usr/lib/python3/dist-packages"
+    export PATH="${APPDIR}/usr/local/bin:${APPDIR}/usr/bin:${PATH}"
+    "${APPDIR}/opt/libc/usr/lib64/ld-linux-x86-64.so.2" \
+      --library-path "${APPDIR}/opt/libc/usr/lib/x86_64-linux-gnu:${APPDIR}/usr/lib/x86_64-linux-gnu:${APPDIR}/usr/lib" \
+      "${APPDIR}/usr/bin/python3" -m pip install --upgrade --isolated --no-input --ignore-installed --no-deps --prefix="${APPDIR}/usr" -r packaging/appimage/requirements.txt
+    unset PYTHONHOME
+    unset PYTHONPATH
+    /usr/bin/python3 -m pip install --upgrade --isolated --no-input --ignore-installed --no-deps --target="${APPDIR}/usr/lib/python3.12/site-packages" stopit==1.1.2
+    /bin/mkdir -p "${APPDIR}/opt/libc/lib64"
+    /bin/ln -sf ../usr/lib64/ld-linux-x86-64.so.2 "${APPDIR}/opt/libc/lib64/ld-linux-x86-64.so.2"
+
+  runtime:
+    env:
+      PYTHONHOME: "${APPDIR}/usr"
+      PYTHONPATH: "${APPDIR}/usr/lib/python3.12/site-packages:${APPDIR}/usr/lib/python3.12/dist-packages:${APPDIR}/usr/lib/python3/dist-packages"
+      PATH: "${APPDIR}/usr/local/bin:${APPDIR}/usr/bin:${PATH}"
+
+AppImage:
+  arch: x86_64

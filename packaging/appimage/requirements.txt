@@ -1,0 +1,7 @@
+pymupdf==1.26.4
+pillow==11.3.0
+klembord==0.3.0
+python-xlib==0.26
+six==1.17.0
+tkinterdnd2==0.4.3
+setuptools<81

@@ -1,0 +1,12 @@
+#!/usr/bin/env sh
+set -eu
+
+if [ -z "${APPDIR:-}" ]; then
+  SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+  APPDIR=$(CDPATH= cd -- "$SCRIPT_DIR/../.." && pwd)
+  export APPDIR
+fi
+
+exec "$APPDIR/opt/libc/usr/lib64/ld-linux-x86-64.so.2" \
+  --library-path "$APPDIR/opt/libc/usr/lib/x86_64-linux-gnu:$APPDIR/usr/lib/x86_64-linux-gnu:$APPDIR/usr/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
+  "$APPDIR/usr/bin/uname" "$@"
